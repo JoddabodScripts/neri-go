@@ -6,7 +6,7 @@ official JavaScript SDK, [`@nerimity/nerimity.js`](https://github.com/Nerimity/n
 ## Install
 
 ```sh
-go get github.com/JoddabodScripts/neri-go
+go install github.com/JoddabodScripts/neri-go
 ```
 
 ## Quickstart
