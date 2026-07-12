@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/JoddabodScripts/neri-go"
 )
