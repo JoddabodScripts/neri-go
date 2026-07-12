@@ -2,6 +2,7 @@ package nerimity
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 )
 
@@ -30,6 +31,7 @@ type eventHandlers struct {
 	onServerRoleUpdated      []func(*ServerRole)
 	onServerRoleDeleted      []func(*ServerRole)
 	onServerRoleOrderUpdated []func(server *Server, roles []*ServerRole)
+	onError                  []func(error)
 }
 
 // MessageDeleteEvent is the payload for OnMessageDelete: the message is already
@@ -188,6 +190,29 @@ func (c *Client) OnServerRoleOrderUpdated(fn func(server *Server, roles []*Serve
 	c.handlers.onServerRoleOrderUpdated = append(c.handlers.onServerRoleOrderUpdated, fn)
 }
 
+// OnError registers a handler called whenever the client fails to decode a
+// gateway event's payload. This should never happen in normal operation; if it
+// does, the gateway sent something this SDK version doesn't understand for
+// that event, and the event in question was dropped (its handlers did not
+// run, and any cache updates it would have made did not happen). Registering
+// a handler here is optional but strongly recommended in production, since a
+// silently dropped "user:authenticated" payload, for example, otherwise looks
+// like the bot connecting successfully but every later handler seeing a nil
+// Client.User().
+func (c *Client) OnError(fn func(error)) {
+	c.handlers.mu.Lock()
+	defer c.handlers.mu.Unlock()
+	c.handlers.onError = append(c.handlers.onError, fn)
+}
+
+// reportError delivers err to every registered OnError handler. Safe to call
+// with no handlers registered (a no-op).
+func (c *Client) reportError(err error) {
+	for _, fn := range c.snapshotHandlers().onError {
+		fn(err)
+	}
+}
+
 // ---- dispatch ----
 
 // Gateway event names, verified against nerimity.js's SocketServerEvents.
@@ -256,21 +281,52 @@ func (c *Client) handleEvent(ev incomingEvent) {
 	}
 }
 
+// onAuthenticated handles "user:authenticated". It decodes the payload one
+// top-level field at a time rather than in a single json.Unmarshal call: the
+// "user" field is by far the most important one to get right, since
+// Client.User() being nil after this event fires is exactly the kind of bug
+// that surfaces three call frames away as a nil pointer panic in unrelated
+// code. If any other field (servers, channels, serverMembers, serverRoles)
+// fails to decode — say, because the gateway added a field shape this SDK
+// version doesn't know about — that failure is reported via OnError and
+// skipped, but it no longer prevents Client.User() from being set and OnReady
+// from firing.
 func (c *Client) onAuthenticated(payload json.RawMessage) {
-	var p authenticatedPayload
-	if err := json.Unmarshal(payload, &p); err != nil {
+	var envelope struct {
+		User          json.RawMessage `json:"user"`
+		Servers       json.RawMessage `json:"servers"`
+		Channels      json.RawMessage `json:"channels"`
+		ServerMembers json.RawMessage `json:"serverMembers"`
+		ServerRoles   json.RawMessage `json:"serverRoles"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding user:authenticated payload: %w", err))
 		return
 	}
 
+	var rawSelf rawUser
+	if err := json.Unmarshal(envelope.User, &rawSelf); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding user:authenticated \"user\" field: %w", err))
+		return
+	}
 	c.mu.Lock()
-	c.user = &ClientUser{User: newUser(c, p.User)}
+	c.user = &ClientUser{User: newUser(c, rawSelf)}
 	c.mu.Unlock()
-	c.users.set(p.User.ID, c.user.User)
+	c.users.set(rawSelf.ID, c.user.User)
 
-	for _, s := range p.Servers {
+	var servers []rawServer
+	if err := json.Unmarshal(envelope.Servers, &servers); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding user:authenticated \"servers\" field: %w", err))
+	}
+	for _, s := range servers {
 		c.servers.setServer(s)
 	}
-	for _, rawCh := range p.Channels {
+
+	var channels []rawChannel
+	if err := json.Unmarshal(envelope.Channels, &channels); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding user:authenticated \"channels\" field: %w", err))
+	}
+	for _, rawCh := range channels {
 		ch := c.channels.setChannel(rawCh)
 		if rawCh.ServerID != "" {
 			if server, ok := c.servers.get(rawCh.ServerID); ok {
@@ -278,14 +334,24 @@ func (c *Client) onAuthenticated(payload json.RawMessage) {
 			}
 		}
 	}
-	for _, m := range p.ServerMembers {
+
+	var members []rawServerMember
+	if err := json.Unmarshal(envelope.ServerMembers, &members); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding user:authenticated \"serverMembers\" field: %w", err))
+	}
+	for _, m := range members {
 		c.users.setUser(m.User)
 		if server, ok := c.servers.get(m.ServerID); ok {
 			member := newServerMember(c, m)
 			server.members.set(member.ID, member)
 		}
 	}
-	for _, r := range p.ServerRoles {
+
+	var roles []rawServerRole
+	if err := json.Unmarshal(envelope.ServerRoles, &roles); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding user:authenticated \"serverRoles\" field: %w", err))
+	}
+	for _, r := range roles {
 		if server, ok := c.servers.get(r.ServerID); ok {
 			role := newServerRole(c, r)
 			server.roles.set(role.ID, role)
@@ -320,6 +386,7 @@ func (c *Client) snapshotHandlers() eventHandlersSnapshot {
 		onServerRoleUpdated:      append([]func(*ServerRole){}, c.handlers.onServerRoleUpdated...),
 		onServerRoleDeleted:      append([]func(*ServerRole){}, c.handlers.onServerRoleDeleted...),
 		onServerRoleOrderUpdated: append([]func(*Server, []*ServerRole){}, c.handlers.onServerRoleOrderUpdated...),
+		onError:                  append([]func(error){}, c.handlers.onError...),
 	}
 }
 
@@ -346,6 +413,7 @@ type eventHandlersSnapshot struct {
 	onServerRoleUpdated      []func(*ServerRole)
 	onServerRoleDeleted      []func(*ServerRole)
 	onServerRoleOrderUpdated []func(*Server, []*ServerRole)
+	onError                  []func(error)
 }
 
 type serverMemberJoinedPayload struct {
@@ -356,6 +424,7 @@ type serverMemberJoinedPayload struct {
 func (c *Client) onServerMemberJoined(payload json.RawMessage) {
 	var p serverMemberJoinedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	server, ok := c.servers.get(p.ServerID)
@@ -382,6 +451,7 @@ type serverMemberUpdatedPayload struct {
 func (c *Client) onServerMemberUpdated(payload json.RawMessage) {
 	var p serverMemberUpdatedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	server, ok := c.servers.get(p.ServerID)
@@ -411,6 +481,7 @@ type serverJoinedPayload struct {
 func (c *Client) onServerJoined(payload json.RawMessage) {
 	var p serverJoinedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	server := c.servers.setServer(p.Server)
@@ -442,6 +513,7 @@ type serverChannelCreatedPayload struct {
 func (c *Client) onServerChannelCreated(payload json.RawMessage) {
 	var p serverChannelCreatedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	ch := c.channels.setChannel(p.Channel)
@@ -463,13 +535,14 @@ type serverChannelUpdatedPayload struct {
 func (c *Client) onServerChannelUpdated(payload json.RawMessage) {
 	var p serverChannelUpdatedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	ch, ok := c.channels.get(p.ChannelID)
 	if !ok {
 		return
 	}
-	applyChannelUpdate(ch, payload)
+	c.applyChannelUpdate(ch, payload)
 
 	for _, fn := range c.snapshotHandlers().onServerChannelUpdated {
 		fn(ch)
@@ -478,11 +551,12 @@ func (c *Client) onServerChannelUpdated(payload json.RawMessage) {
 
 // applyChannelUpdate merges only the fields present in the raw "updated" JSON
 // object onto ch, so fields the server omitted are left untouched.
-func applyChannelUpdate(ch *Channel, payload json.RawMessage) {
+func (c *Client) applyChannelUpdate(ch *Channel, payload json.RawMessage) {
 	var envelope struct {
 		Updated map[string]json.RawMessage `json:"updated"`
 	}
 	if err := json.Unmarshal(payload, &envelope); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding server:channel_updated \"updated\" field: %w", err))
 		return
 	}
 	if raw, ok := envelope.Updated["name"]; ok {
@@ -507,6 +581,7 @@ type serverChannelDeletedPayload struct {
 func (c *Client) onServerChannelDeleted(payload json.RawMessage) {
 	var p serverChannelDeletedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	if !c.channels.has(p.ChannelID) {
@@ -530,6 +605,7 @@ type serverLeftPayload struct {
 func (c *Client) onServerLeft(payload json.RawMessage) {
 	var p serverLeftPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	server, ok := c.servers.get(p.ServerID)
@@ -558,6 +634,7 @@ type serverMemberLeftPayload struct {
 func (c *Client) onServerMemberLeft(payload json.RawMessage) {
 	var p serverMemberLeftPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	server, ok := c.servers.get(p.ServerID)
@@ -582,6 +659,7 @@ type messageCreatedPayload struct {
 func (c *Client) onMessageCreated(payload json.RawMessage) {
 	var p messageCreatedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	msg := c.messages.setMessage(p.Message)
@@ -600,6 +678,7 @@ type messageUpdatedPayload struct {
 func (c *Client) onMessageUpdated(payload json.RawMessage) {
 	var p messageUpdatedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	msg, ok := c.messages.get(p.MessageID)
@@ -622,6 +701,7 @@ type messageDeletedPayload struct {
 func (c *Client) onMessageDeleted(payload json.RawMessage) {
 	var p messageDeletedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	c.messages.delete(p.MessageID)
@@ -635,6 +715,7 @@ func (c *Client) onMessageDeleted(payload json.RawMessage) {
 func (c *Client) onMessageButtonClicked(payload json.RawMessage) {
 	var p messageButtonClickPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	button := newMessageButton(c, p)
@@ -647,6 +728,7 @@ func (c *Client) onMessageButtonClicked(payload json.RawMessage) {
 func (c *Client) onServerRoleCreated(payload json.RawMessage) {
 	var p rawServerRole
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	server, ok := c.servers.get(p.ServerID)
@@ -669,6 +751,7 @@ type serverRoleDeletedPayload struct {
 func (c *Client) onServerRoleDeleted(payload json.RawMessage) {
 	var p serverRoleDeletedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	server, ok := c.servers.get(p.ServerID)
@@ -694,6 +777,7 @@ type serverRoleUpdatedPayload struct {
 func (c *Client) onServerRoleUpdated(payload json.RawMessage) {
 	var p serverRoleUpdatedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	server, ok := c.servers.get(p.ServerID)
@@ -704,18 +788,19 @@ func (c *Client) onServerRoleUpdated(payload json.RawMessage) {
 	if !ok {
 		return
 	}
-	applyRoleUpdate(role, payload)
+	c.applyRoleUpdate(role, payload)
 
 	for _, fn := range c.snapshotHandlers().onServerRoleUpdated {
 		fn(role)
 	}
 }
 
-func applyRoleUpdate(role *ServerRole, payload json.RawMessage) {
+func (c *Client) applyRoleUpdate(role *ServerRole, payload json.RawMessage) {
 	var envelope struct {
 		Updated map[string]json.RawMessage `json:"updated"`
 	}
 	if err := json.Unmarshal(payload, &envelope); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding server:role_updated \"updated\" field: %w", err))
 		return
 	}
 	if raw, ok := envelope.Updated["name"]; ok {
@@ -740,6 +825,7 @@ type serverRoleOrderUpdatedPayload struct {
 func (c *Client) onServerRoleOrderUpdated(payload json.RawMessage) {
 	var p serverRoleOrderUpdatedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	server, ok := c.servers.get(p.ServerID)
@@ -760,6 +846,7 @@ func (c *Client) onServerRoleOrderUpdated(payload json.RawMessage) {
 func (c *Client) onMessageReactionAdded(payload json.RawMessage) {
 	var p reactionAddedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	reaction := newReactionFromAdded(c, p)
@@ -773,6 +860,7 @@ func (c *Client) onMessageReactionAdded(payload json.RawMessage) {
 func (c *Client) onMessageReactionRemoved(payload json.RawMessage) {
 	var p reactionRemovedPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		c.reportError(fmt.Errorf("nerimity: decoding gateway event payload: %w", err))
 		return
 	}
 	reaction := newReactionFromRemoved(c, p)

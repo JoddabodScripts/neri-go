@@ -164,3 +164,24 @@ client.OnServerRoleOrderUpdated(func(server *nerimity.Server, roles []*nerimity.
 
 Fires when a server's role hierarchy is reordered. `roles` is every cached
 role for that server, already updated to the new `Order` values.
+
+## Error
+
+```go
+client.OnError(func(err error) {
+	log.Printf("nerimity: dropped a gateway event: %v", err)
+})
+```
+
+Fires whenever the client fails to decode a gateway event's payload — normally
+because the server sent a shape this SDK version doesn't recognize for that
+event. The event in question is dropped: its own handlers did not run, and any
+cache updates it would have made did not happen.
+
+Registering `OnError` is optional but strongly recommended in production. The
+one case worth calling out specifically: if part of the `Ready`/authentication
+payload fails to decode, the client still sets `Client.User()` and fires
+`OnReady` as long as the `user` field itself parsed correctly — only the
+malformed sub-field (say, `serverRoles`) is skipped and reported here. Without
+an `OnError` handler you'd have no visibility into that partial failure at
+all.
