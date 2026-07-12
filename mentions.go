@@ -9,7 +9,7 @@ import (
 type MentionType string
 
 const (
-	// MentionTypeUser is a mention of a specific user: "[@:<userId>]".
+	// MentionTypeUser is a mention of a specific user: "[@:userId]".
 	MentionTypeUser MentionType = "user"
 	// MentionTypeEveryone is the @everyone mention: "[@:e]".
 	MentionTypeEveryone MentionType = "everyone"
