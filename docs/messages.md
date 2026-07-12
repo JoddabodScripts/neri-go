@@ -120,6 +120,26 @@ component ID.
 If the clicked message wasn't in the local cache, `b.Message` is nil and
 `b.Partial` is true; call `b.Fetch(ctx)` to fetch it from the API.
 
+### Responding with a real message instead of a callback
+
+`Respond` posts a callback tied to the click — the clicking user sees it as a
+modal, and it isn't a normal chat message. If you want the click to post an
+actual, persisted message to the channel instead, use `b.Channel`, which is
+just a regular `*Channel`:
+
+```go
+client.OnMessageButtonClick(func(b *nerimity.MessageButton) {
+	if b.ID != "post" || b.Channel == nil {
+		return
+	}
+	b.Channel.Send(context.Background(), "Someone clicked the button!")
+})
+```
+
+This is the same `Channel.Send` you'd use anywhere else — nothing
+button-specific about it. See [`examples/button-bot`](../examples/button-bot)
+for both styles side by side.
+
 ## Attachments
 
 Upload a file, then reference the returned CDN file ID when sending:
