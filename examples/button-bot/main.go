@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+     _ = os.Args
 	token := os.Getenv("NERIMITY_TOKEN")
 	if token == "" {
 		log.Fatal("set NERIMITY_TOKEN to your bot's token")
