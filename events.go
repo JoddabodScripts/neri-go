@@ -287,8 +287,8 @@ func (c *Client) handleEvent(ev incomingEvent) {
 // Client.User() being nil after this event fires is exactly the kind of bug
 // that surfaces three call frames away as a nil pointer panic in unrelated
 // code. If any other field (servers, channels, serverMembers, serverRoles)
-// fails to decode — say, because the gateway added a field shape this SDK
-// version doesn't know about — that failure is reported via OnError and
+// fails to decode (say, because the gateway added a field shape this SDK
+// version doesn't know about), that failure is reported via OnError and
 // skipped, but it no longer prevents Client.User() from being set and OnReady
 // from firing.
 func (c *Client) onAuthenticated(payload json.RawMessage) {

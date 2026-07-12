@@ -48,8 +48,8 @@ reconnect) until `client.Close()` is called or its context is cancelled.
 
 ## Event model
 
-Handlers are registered with typed `On*` methods on `Client` — `OnReady`,
-`OnMessageCreate`, `OnMessageButtonClick`, `OnServerMemberJoined`, and so on —
+Handlers are registered with typed `On*` methods on `Client`: `OnReady`,
+`OnMessageCreate`, `OnMessageButtonClick`, `OnServerMemberJoined`, and so on,
 rather than a single stringly-typed emitter. This keeps every handler's
 signature discoverable via `go doc` and checked by the compiler. You can
 register more than one handler for the same event; they run, in registration
@@ -61,15 +61,15 @@ types and example handlers.
 
 ## Documentation
 
-- [`docs/getting-started.md`](docs/getting-started.md) — a longer walkthrough
-- [`docs/events.md`](docs/events.md) — every event, its payload, and an example
-- [`docs/messages.md`](docs/messages.md) — sending, replying, editing, buttons,
+- [`docs/getting-started.md`](docs/getting-started.md): a longer walkthrough
+- [`docs/events.md`](docs/events.md): every event, its payload, and an example
+- [`docs/messages.md`](docs/messages.md): sending, replying, editing, buttons,
   attachments, HTML embeds
-- [`docs/webhooks.md`](docs/webhooks.md) — sending messages without a bot
-- [`docs/permissions.md`](docs/permissions.md) — the permission bit reference
-- [`docs/slash-commands.md`](docs/slash-commands.md) — registration and the
+- [`docs/webhooks.md`](docs/webhooks.md): sending messages without a bot
+- [`docs/permissions.md`](docs/permissions.md): the permission bit reference
+- [`docs/slash-commands.md`](docs/slash-commands.md): registration and the
   sub-command routing pattern
-- [`docs/mentions.md`](docs/mentions.md) — mention parsing and stripping
+- [`docs/mentions.md`](docs/mentions.md): mention parsing and stripping
 
 Worked examples live in [`examples/`](examples/): an echo bot, a
 button-interaction bot, and a webhook sender.
@@ -81,7 +81,7 @@ button-interaction bot, and a webhook sender.
   pattern in [`docs/slash-commands.md`](docs/slash-commands.md), not forced on
   you as a framework.
 - Sends on a single channel are queued and executed in order, matching the JS
-  SDK's per-channel `AsyncFunctionQueue` behavior — concurrent calls to
+  SDK's per-channel `AsyncFunctionQueue` behavior: concurrent calls to
   `channel.Send` never race or reorder messages.
 - The message cache is an LRU with a default limit of 1000, matching the JS
   SDK's `Collection`.
@@ -93,4 +93,4 @@ Claude Code) for project layout, test/lint commands, and conventions.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).

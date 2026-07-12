@@ -3,7 +3,7 @@
 Every event is registered with a typed `On<Name>` method on `Client`. You can
 register more than one handler per event; they run in registration order on a
 single internal goroutine, so they can safely read the client's caches without
-extra locking. Don't block for a long time inside a handler — it delays every
+extra locking. Don't block for a long time inside a handler; it delays every
 other event until it returns.
 
 ## Ready
@@ -47,7 +47,7 @@ client.OnMessageDelete(func(e nerimity.MessageDeleteEvent) {
 })
 ```
 
-Fires when a message is deleted. Only IDs are available — by the time this
+Fires when a message is deleted. Only IDs are available: by the time this
 fires, the message has already been evicted from the cache.
 
 ## MessageReactionAdded / MessageReactionRemoved
@@ -133,7 +133,7 @@ client.OnServerChannelDeleted(func(e nerimity.ServerChannelDeleteEvent) {
 })
 ```
 
-`ServerChannel` is an alias for `Channel` — see [`messages.md`](messages.md)
+`ServerChannel` is an alias for `Channel`; see [`messages.md`](messages.md)
 for its fields.
 
 ## ServerRoleCreated / ServerRoleUpdated / ServerRoleDeleted
@@ -173,7 +173,7 @@ client.OnError(func(err error) {
 })
 ```
 
-Fires whenever the client fails to decode a gateway event's payload — normally
+Fires whenever the client fails to decode a gateway event's payload, normally
 because the server sent a shape this SDK version doesn't recognize for that
 event. The event in question is dropped: its own handlers did not run, and any
 cache updates it would have made did not happen.
@@ -181,7 +181,7 @@ cache updates it would have made did not happen.
 Registering `OnError` is optional but strongly recommended in production. The
 one case worth calling out specifically: if part of the `Ready`/authentication
 payload fails to decode, the client still sets `Client.User()` and fires
-`OnReady` as long as the `user` field itself parsed correctly — only the
+`OnReady` as long as the `user` field itself parsed correctly; only the
 malformed sub-field (say, `serverRoles`) is skipped and reported here. Without
 an `OnError` handler you'd have no visibility into that partial failure at
 all.

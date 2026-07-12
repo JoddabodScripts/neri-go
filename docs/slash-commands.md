@@ -9,7 +9,7 @@ err := client.UpdateCommands(ctx, "your bot token", []nerimity.CommandDefinition
 })
 ```
 
-`UpdateCommands` replaces the bot's entire command list — pass every command
+`UpdateCommands` replaces the bot's entire command list; pass every command
 you want to keep, not just the ones changing. It authenticates with the token
 you pass directly (not the session from `Login`), so it can be called without
 an active connection; typically you run this once, out of band, whenever your
@@ -50,7 +50,7 @@ client.OnMessageCreate(func(m *nerimity.Message) {
 })
 ```
 
-`m.Command` is only set when the message targets this bot's user ID — commands
+`m.Command` is only set when the message targets this bot's user ID; commands
 sent to other bots don't parse as yours, even if the same channel sees both.
 
 ## Sub-command routing pattern
@@ -86,6 +86,6 @@ client.OnMessageCreate(func(m *nerimity.Message) {
 ```
 
 This scales to a small router function per top-level command if you have many
-commands — a `map[string]func(*nerimity.Message, []string)` keyed by command
+commands; a `map[string]func(*nerimity.Message, []string)` keyed by command
 name is a natural next step, and you're free to build one; the SDK just
 doesn't ship one for you.

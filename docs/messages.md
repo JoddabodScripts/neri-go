@@ -47,7 +47,7 @@ type MessageOptions struct {
 
 Sends on the same channel are serialized (a per-channel queue), so calling
 `Send` concurrently from multiple goroutines never reorders or interleaves
-requests — the same guarantee the JS SDK's `AsyncFunctionQueue` gives you.
+requests; the same guarantee the JS SDK's `AsyncFunctionQueue` gives you.
 
 ## Replying
 
@@ -122,7 +122,7 @@ If the clicked message wasn't in the local cache, `b.Message` is nil and
 
 ### Responding with a real message instead of a callback
 
-`Respond` posts a callback tied to the click — the clicking user sees it as a
+`Respond` posts a callback tied to the click; the clicking user sees it as a
 modal, and it isn't a normal chat message. If you want the click to post an
 actual, persisted message to the channel instead, use `b.Channel`, which is
 just a regular `*Channel`:
@@ -136,7 +136,7 @@ client.OnMessageButtonClick(func(b *nerimity.MessageButton) {
 })
 ```
 
-This is the same `Channel.Send` you'd use anywhere else — nothing
+This is the same `Channel.Send` you'd use anywhere else; nothing
 button-specific about it. See [`examples/button-bot`](../examples/button-bot)
 for both styles side by side.
 
@@ -171,8 +171,8 @@ server-side validator is stricter than a browser:
 - `position: fixed` is rejected outright.
 - The validator counts opening and closing tags with a regular expression to
   check the markup is balanced. **Any `<`, `>`, `&`, `"`, or `'` character
-  inside text content — including anything you didn't write yourself, like a
-  username or message content you're echoing back — throws that count off and
+  inside text content, including anything you didn't write yourself, like a
+  username or message content you're echoing back, throws that count off and
   gets the whole embed rejected**, not just sanitized.
 
 Because of that last point, escape any string you didn't write literally in Go

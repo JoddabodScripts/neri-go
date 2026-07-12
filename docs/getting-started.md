@@ -10,7 +10,7 @@ Requires Go 1.21+ (generics are used internally for the LRU cache).
 
 ## Create a bot token
 
-Create a bot on Nerimity and grab its token. Treat it like a password — anyone
+Create a bot on Nerimity and grab its token. Treat it like a password; anyone
 with it can act as your bot.
 
 ## A minimal bot
@@ -74,7 +74,7 @@ client := nerimity.New(nerimity.Options{
 
 `Login` authenticates over the Nerimity WebSocket gateway. If the connection
 drops, the client automatically reconnects with exponential backoff (1s
-doubling up to a 5s cap, with jitter — the same timing the JS SDK's underlying
+doubling up to a 5s cap, with jitter, the same timing the JS SDK's underlying
 `socket.io-client` uses) and re-runs the handshake, which repopulates every
 cache and fires `OnReady` again. Handlers don't need to do anything special to
 survive a reconnect; just don't assume `OnReady` fires exactly once.

@@ -20,7 +20,7 @@ type Mention struct {
 }
 ```
 
-Matching the JS SDK, mentions are **not** resolved to display names here — you
+Matching the JS SDK, mentions are **not** resolved to display names here; you
 get the raw token and, for user mentions, the ID. If you need the mentioning
 user's `User` object, look it up yourself:
 

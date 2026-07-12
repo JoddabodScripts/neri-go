@@ -39,7 +39,7 @@ if role.HasPermission(nerimity.PermManageChannels) {
 }
 ```
 
-This checks the role's own bitfield only — it does not account for
+This checks the role's own bitfield only; it does not account for
 admin/owner overrides.
 
 ## Checking what a member can actually do
