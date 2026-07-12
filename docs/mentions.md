@@ -2,11 +2,11 @@
 
 Nerimity encodes mentions as raw tokens in message content:
 
-| Token          | Meaning                          |
-|----------------|-----------------------------------|
-| `[@:<userId>]` | Mention of a specific user        |
-| `[@:e]`        | `@everyone`                       |
-| `[@:s]`        | `@someone` (random online member) |
+| Token        | Meaning                          |
+|--------------|-----------------------------------|
+| `[@:userId]` | Mention of a specific user        |
+| `[@:e]`      | `@everyone`                       |
+| `[@:s]`      | `@someone` (random online member) |
 
 ## Parsed mentions
 
